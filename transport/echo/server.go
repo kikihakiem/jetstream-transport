@@ -10,8 +10,8 @@ import (
 	gkit "github.com/kikihakiem/gkit/core"
 )
 
-// Server wraps an endpoint and implements echo.HandlerFunc.
-type Server[Req, Res any] struct {
+// Handler wraps an endpoint and implements echo.HandlerFunc.
+type Handler[Req, Res any] struct {
 	e            gkit.Endpoint[Req, Res]
 	dec          gkit.EncodeDecodeFunc[echo.Context, Req]
 	enc          EncodeResponseFunc[Res]
@@ -22,15 +22,15 @@ type Server[Req, Res any] struct {
 	errorHandler gkit.ErrorHandler
 }
 
-// NewServer constructs a new HTTP server, which implements echo.HandlerFunc and wraps
+// NewHandler constructs a new HTTP server, which implements echo.HandlerFunc and wraps
 // the provided endpoint.
-func NewServer[Req, Res any](
+func NewHandler[Req, Res any](
 	e gkit.Endpoint[Req, Res],
 	dec gkit.EncodeDecodeFunc[echo.Context, Req],
 	enc EncodeResponseFunc[Res],
 	options ...ServerOption[Req, Res],
-) *Server[Req, Res] {
-	s := &Server[Req, Res]{
+) *Handler[Req, Res] {
+	s := &Handler[Req, Res]{
 		e:            e,
 		dec:          dec,
 		enc:          enc,
@@ -43,19 +43,29 @@ func NewServer[Req, Res any](
 	return s
 }
 
+// NewHandlerFunc simply returns the handler function.
+func NewHandlerFunc[Req, Res any](
+	e gkit.Endpoint[Req, Res],
+	dec gkit.EncodeDecodeFunc[echo.Context, Req],
+	enc EncodeResponseFunc[Res],
+	options ...ServerOption[Req, Res],
+) echo.HandlerFunc {
+	return NewHandler(e, dec, enc, options...).Handle
+}
+
 // ServerOption sets an optional parameter for servers.
-type ServerOption[Req, Res any] gkit.Option[*Server[Req, Res]]
+type ServerOption[Req, Res any] gkit.Option[*Handler[Req, Res]]
 
 // ServerBefore functions are executed on the HTTP request object before the
 // request is decoded.
 func ServerBefore[Req, Res any](before ...gkit.BeforeRequestFunc[echo.Context]) ServerOption[Req, Res] {
-	return func(s *Server[Req, Res]) { s.before = append(s.before, before...) }
+	return func(s *Handler[Req, Res]) { s.before = append(s.before, before...) }
 }
 
 // ServerAfter functions are executed on the HTTP response writer after the
 // endpoint is invoked, but before anything is written to the client.
 func ServerAfter[Req, Res any](after ...gkit.AfterResponseFunc[echo.Context]) ServerOption[Req, Res] {
-	return func(s *Server[Req, Res]) { s.after = append(s.after, after...) }
+	return func(s *Handler[Req, Res]) { s.after = append(s.after, after...) }
 }
 
 // ServerErrorEncoder is used to encode errors to the echo.Context
@@ -63,7 +73,7 @@ func ServerAfter[Req, Res any](after ...gkit.AfterResponseFunc[echo.Context]) Se
 // use this to provide custom error formatting and response codes. By default,
 // errors will be written with the DefaultErrorEncoder.
 func ServerErrorEncoder[Req, Res any](ee gkit.ErrorEncoder[echo.Context]) ServerOption[Req, Res] {
-	return func(s *Server[Req, Res]) { s.errorEncoder = ee }
+	return func(s *Handler[Req, Res]) { s.errorEncoder = ee }
 }
 
 // ServerErrorHandler is used to handle non-terminal errors. By default, non-terminal errors
@@ -72,17 +82,17 @@ func ServerErrorEncoder[Req, Res any](ee gkit.ErrorEncoder[echo.Context]) Server
 // custom ServerErrorEncoder or ServerFinalizer, both of which have access to
 // the context.
 func ServerErrorHandler[Req, Res any](errorHandler gkit.ErrorHandler) ServerOption[Req, Res] {
-	return func(s *Server[Req, Res]) { s.errorHandler = errorHandler }
+	return func(s *Handler[Req, Res]) { s.errorHandler = errorHandler }
 }
 
 // ServerFinalizer is executed at the end of every HTTP request.
 // By default, no finalizer is registered.
 func ServerFinalizer[Req, Res any](f ...ServerFinalizerFunc) ServerOption[Req, Res] {
-	return func(s *Server[Req, Res]) { s.finalizer = append(s.finalizer, f...) }
+	return func(s *Handler[Req, Res]) { s.finalizer = append(s.finalizer, f...) }
 }
 
-// ServeHTTP implements echo.HandlerFunc.
-func (s Server[Req, Res]) ServeHTTP(c echo.Context) error {
+// Handle implements echo.HandlerFunc.
+func (s Handler[Req, Res]) Handle(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	if len(s.finalizer) > 0 {
@@ -154,7 +164,7 @@ func DecodeJSONRequest[Req any](_ context.Context, c echo.Context) (Req, error) 
 
 // EncodeJSONResponse is a EncodeResponseFunc that serializes the response as a
 // JSON object to the ResponseWriter. Many JSON-over-HTTP services can use it as
-// a sensible default. TODO: If the response implements Headerer, the provided headers
+// a sensible default. If the response implements Headerer, the provided headers
 // will be applied to the response. If the response implements StatusCoder, the
 // provided StatusCode will be used instead of 200.
 func EncodeJSONResponse[Res any](_ context.Context, c echo.Context, response Res) error {

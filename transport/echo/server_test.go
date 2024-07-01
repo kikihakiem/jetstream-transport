@@ -1,3 +1,5 @@
+//go:build unit
+
 package echo_test
 
 import (
@@ -17,36 +19,36 @@ import (
 type emptyStruct struct{}
 
 func TestServerBadDecode(t *testing.T) {
-	handler := echotransport.NewServer(
+	handlerFunc := echotransport.NewHandlerFunc(
 		func(context.Context, any) (any, error) { return emptyStruct{}, nil },
 		func(context.Context, echo.Context) (any, error) { return emptyStruct{}, errors.New("dang") },
 		func(context.Context, echo.Context, any) error { return nil },
 	)
-	rec, _ := handleWith(handler)
+	rec, _ := handleWith[any, any](handlerFunc)
 	if want, have := http.StatusInternalServerError, rec.Result().StatusCode; want != have {
 		t.Errorf("want %d, have %d", want, have)
 	}
 }
 
 func TestServerBadEndpoint(t *testing.T) {
-	handler := echotransport.NewServer(
+	handlerFunc := echotransport.NewHandlerFunc(
 		func(context.Context, any) (any, error) { return emptyStruct{}, errors.New("dang") },
 		func(context.Context, echo.Context) (any, error) { return emptyStruct{}, nil },
 		func(context.Context, echo.Context, any) error { return nil },
 	)
-	rec, _ := handleWith(handler)
+	rec, _ := handleWith[any, any](handlerFunc)
 	if want, have := http.StatusInternalServerError, rec.Result().StatusCode; want != have {
 		t.Errorf("want %d, have %d", want, have)
 	}
 }
 
 func TestServerBadEncode(t *testing.T) {
-	handler := echotransport.NewServer(
+	handlerFunc := echotransport.NewHandlerFunc(
 		func(context.Context, any) (any, error) { return emptyStruct{}, nil },
 		func(context.Context, echo.Context) (any, error) { return emptyStruct{}, nil },
 		func(context.Context, echo.Context, any) error { return errors.New("dang") },
 	)
-	rec, _ := handleWith(handler)
+	rec, _ := handleWith[any, any](handlerFunc)
 	if want, have := http.StatusInternalServerError, rec.Result().StatusCode; want != have {
 		t.Errorf("want %d, have %d", want, have)
 	}
@@ -60,13 +62,13 @@ func TestServerErrorEncoder(t *testing.T) {
 		}
 		return http.StatusInternalServerError
 	}
-	handler := echotransport.NewServer(
+	handlerFunc := echotransport.NewHandlerFunc(
 		func(context.Context, emptyStruct) (emptyStruct, error) { return emptyStruct{}, errTeapot },
 		func(context.Context, echo.Context) (emptyStruct, error) { return emptyStruct{}, nil },
 		func(context.Context, echo.Context, emptyStruct) error { return nil },
 		echotransport.ServerErrorEncoder[emptyStruct, emptyStruct](func(_ context.Context, c echo.Context, err error) { c.Response().WriteHeader(code(err)) }),
 	)
-	rec, _ := handleWith(handler)
+	rec, _ := handleWith[emptyStruct, emptyStruct](handlerFunc)
 	if want, have := http.StatusTeapot, rec.Result().StatusCode; want != have {
 		t.Errorf("want %d, have %d", want, have)
 	}
@@ -75,7 +77,7 @@ func TestServerErrorEncoder(t *testing.T) {
 func TestServerErrorHandler(t *testing.T) {
 	errTeapot := errors.New("teapot")
 	msgChan := make(chan string, 1)
-	handler := echotransport.NewServer(
+	handlerFunc := echotransport.NewHandlerFunc(
 		func(context.Context, emptyStruct) (emptyStruct, error) { return emptyStruct{}, errTeapot },
 		func(context.Context, echo.Context) (emptyStruct, error) { return emptyStruct{}, nil },
 		func(context.Context, echo.Context, emptyStruct) error { return nil },
@@ -83,7 +85,7 @@ func TestServerErrorHandler(t *testing.T) {
 			msgChan <- err.Error()
 		})),
 	)
-	handleWith(handler)
+	handleWith[emptyStruct, emptyStruct](handlerFunc)
 	if want, have := errTeapot.Error(), <-msgChan; want != have {
 		t.Errorf("want %s, have %s", want, have)
 	}
@@ -107,7 +109,7 @@ func TestMultipleServerBefore(t *testing.T) {
 		responseBody = "go eat a fly ugly\n"
 		done         = make(chan emptyStruct)
 	)
-	handler := echotransport.NewServer(
+	handlerFunc := echotransport.NewHandlerFunc(
 		gkit.NopEndpoint,
 		func(context.Context, echo.Context) (emptyStruct, error) {
 			return emptyStruct{}, nil
@@ -133,7 +135,7 @@ func TestMultipleServerBefore(t *testing.T) {
 		}),
 	)
 
-	handleWith(handler)
+	handleWith[emptyStruct, emptyStruct](handlerFunc)
 
 	select {
 	case <-done:
@@ -150,7 +152,7 @@ func TestMultipleServerAfter(t *testing.T) {
 		responseBody = "go eat a fly ugly\n"
 		done         = make(chan emptyStruct)
 	)
-	handler := echotransport.NewServer(
+	handlerFunc := echotransport.NewHandlerFunc(
 		gkit.NopEndpoint,
 		func(context.Context, echo.Context) (emptyStruct, error) {
 			return emptyStruct{}, nil
@@ -176,7 +178,7 @@ func TestMultipleServerAfter(t *testing.T) {
 		}),
 	)
 
-	handleWith(handler)
+	handleWith[emptyStruct, emptyStruct](handlerFunc)
 
 	select {
 	case <-done:
@@ -193,7 +195,7 @@ func TestServerFinalizer(t *testing.T) {
 		responseBody = "go eat a fly ugly\n"
 		done         = make(chan emptyStruct)
 	)
-	handler := echotransport.NewServer(
+	handlerFunc := echotransport.NewHandlerFunc(
 		gkit.NopEndpoint,
 		func(context.Context, echo.Context) (emptyStruct, error) {
 			return emptyStruct{}, nil
@@ -223,7 +225,7 @@ func TestServerFinalizer(t *testing.T) {
 		}),
 	)
 
-	handleWith(handler)
+	handleWith[emptyStruct, emptyStruct](handlerFunc)
 
 	select {
 	case <-done:
@@ -240,13 +242,13 @@ func (e enhancedResponse) StatusCode() int      { return http.StatusPaymentRequi
 func (e enhancedResponse) Headers() http.Header { return http.Header{"X-Edward": []string{"Snowden"}} }
 
 func TestEncodeJSONResponse(t *testing.T) {
-	handler := echotransport.NewServer(
+	handlerFunc := echotransport.NewHandlerFunc(
 		func(context.Context, any) (any, error) { return enhancedResponse{Foo: "bar"}, nil },
 		func(context.Context, echo.Context) (any, error) { return emptyStruct{}, nil },
 		echotransport.EncodeJSONResponse,
 	)
 
-	rec, err := handleWith(handler)
+	rec, err := handleWith[any, any](handlerFunc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -266,13 +268,13 @@ func (_ multiHeaderResponse) Headers() http.Header {
 }
 
 func TestAddMultipleHeaders(t *testing.T) {
-	handler := echotransport.NewServer(
+	handlerFunc := echotransport.NewHandlerFunc(
 		func(context.Context, any) (any, error) { return multiHeaderResponse{}, nil },
 		func(context.Context, echo.Context) (any, error) { return emptyStruct{}, nil },
 		echotransport.EncodeJSONResponse,
 	)
 
-	rec, err := handleWith(handler)
+	rec, err := handleWith[any, any](handlerFunc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,7 +300,7 @@ func (m multiHeaderResponseError) Error() string {
 
 func TestAddMultipleHeadersErrorEncoder(t *testing.T) {
 	errStr := "oh no"
-	handler := echotransport.NewServer(
+	handlerFunc := echotransport.NewHandlerFunc(
 		func(context.Context, any) (any, error) {
 			return nil, multiHeaderResponseError{msg: errStr}
 		},
@@ -306,7 +308,7 @@ func TestAddMultipleHeadersErrorEncoder(t *testing.T) {
 		echotransport.EncodeJSONResponse,
 	)
 
-	rec, _ := handleWith(handler)
+	rec, _ := handleWith[any, any](handlerFunc)
 
 	expect := map[string]map[string]emptyStruct{"Vary": {"Origin": emptyStruct{}, "User-Agent": emptyStruct{}}}
 	for k, vls := range rec.Header() {
@@ -328,13 +330,13 @@ type noContentResponse emptyStruct
 func (e noContentResponse) StatusCode() int { return http.StatusNoContent }
 
 func TestEncodeNoContent(t *testing.T) {
-	handler := echotransport.NewServer(
-		func(context.Context, interface{}) (interface{}, error) { return noContentResponse{}, nil },
-		func(context.Context, echo.Context) (interface{}, error) { return emptyStruct{}, nil },
+	handlerFunc := echotransport.NewHandlerFunc(
+		func(context.Context, any) (any, error) { return noContentResponse{}, nil },
+		func(context.Context, echo.Context) (any, error) { return emptyStruct{}, nil },
 		echotransport.EncodeJSONResponse,
 	)
 
-	rec, err := handleWith(handler)
+	rec, err := handleWith[any, any](handlerFunc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -355,13 +357,13 @@ func (e enhancedError) MarshalJSON() ([]byte, error) { return []byte(`{"err":"en
 func (e enhancedError) Headers() http.Header         { return http.Header{"X-Enhanced": []string{"1"}} }
 
 func TestEnhancedError(t *testing.T) {
-	handler := echotransport.NewServer(
+	handlerFunc := echotransport.NewHandlerFunc(
 		func(context.Context, any) (any, error) { return nil, enhancedError{} },
 		func(context.Context, echo.Context) (any, error) { return emptyStruct{}, nil },
 		func(_ context.Context, c echo.Context, _ any) error { return nil },
 	)
 
-	rec, _ := handleWith(handler)
+	rec, _ := handleWith[any, any](handlerFunc)
 
 	if want, have := http.StatusTeapot, rec.Result().StatusCode; want != have {
 		t.Errorf("StatusCode: want %d, have %d", want, have)
@@ -381,7 +383,7 @@ type fooRequest struct {
 }
 
 func TestDecodeJSONRequest(t *testing.T) {
-	handler := echotransport.NewServer(
+	handlerFunc := echotransport.NewHandlerFunc(
 		func(ctx context.Context, request fooRequest) (any, error) {
 			if want, have := "bar", request.FromJSONBody; want != have {
 				t.Errorf("Expected %s got %s", want, have)
@@ -403,15 +405,35 @@ func TestDecodeJSONRequest(t *testing.T) {
 	c := e.NewContext(req, rec)
 	c.SetParamNames("id")
 	c.SetParamValues("123")
-	handler.ServeHTTP(c)
+	handlerFunc(c)
+}
+
+func TestDecodeJSONRequestError(t *testing.T) {
+	handlerFunc := echotransport.NewHandlerFunc(
+		func(ctx context.Context, request fooRequest) (any, error) { return nil, nil },
+		echotransport.DecodeJSONRequest,
+		echotransport.EncodeJSONResponse,
+	)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/entities/123", strings.NewReader(`{"foo": "bar"}`))
+	// intentionally leave the content-type header unset
+	// req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	err := handlerFunc(c)
+	if err == nil {
+		t.Fatal("expecting an error, got nil")
+	}
 }
 
 func testServer(t *testing.T) (step func(), resp <-chan *httptest.ResponseRecorder) {
 	var (
-		stepch   = make(chan bool)
-		endpoint = func(context.Context, emptyStruct) (emptyStruct, error) { <-stepch; return emptyStruct{}, nil }
-		response = make(chan *httptest.ResponseRecorder)
-		handler  = echotransport.NewServer(
+		stepch      = make(chan bool)
+		endpoint    = func(context.Context, emptyStruct) (emptyStruct, error) { <-stepch; return emptyStruct{}, nil }
+		response    = make(chan *httptest.ResponseRecorder)
+		handlerFunc = echotransport.NewHandlerFunc(
 			endpoint,
 			func(context.Context, echo.Context) (emptyStruct, error) { return emptyStruct{}, nil },
 			func(context.Context, echo.Context, emptyStruct) error { return nil },
@@ -420,7 +442,7 @@ func testServer(t *testing.T) (step func(), resp <-chan *httptest.ResponseRecord
 		)
 	)
 	go func() {
-		rec, err := handleWith(handler)
+		rec, err := handleWith[emptyStruct, emptyStruct](handlerFunc)
 		if err != nil {
 			t.Error(err)
 			return
@@ -430,10 +452,10 @@ func testServer(t *testing.T) (step func(), resp <-chan *httptest.ResponseRecord
 	return func() { stepch <- true }, response
 }
 
-func handleWith[Req, Res any](handler *echotransport.Server[Req, Res]) (*httptest.ResponseRecorder, error) {
+func handleWith[Req, Res any](handlerFunc echo.HandlerFunc) (*httptest.ResponseRecorder, error) {
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodPost, "/dummy", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	return rec, handler.ServeHTTP(c)
+	return rec, handlerFunc(c)
 }

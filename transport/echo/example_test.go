@@ -14,7 +14,7 @@ import (
 )
 
 func TestPopulateRequestContext(t *testing.T) {
-	handler := echotransport.NewServer(
+	handler := echotransport.NewHandler(
 		func(ctx context.Context, request struct{}) (response struct{}, err error) {
 			assert.Equal(t, http.MethodPatch, ctx.Value(echotransport.ContextKeyRequestMethod).(string))
 			assert.Equal(t, "/search", ctx.Value(echotransport.ContextKeyRequestPath).(string))
@@ -32,5 +32,5 @@ func TestPopulateRequestContext(t *testing.T) {
 	req.Header.Set("X-Request-Id", "a1b2c3d4e5")
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	handler.ServeHTTP(c)
+	handler.Handle(c)
 }

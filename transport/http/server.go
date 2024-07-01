@@ -162,7 +162,7 @@ func DecodeJSONRequest[Req any](_ context.Context, r *http.Request) (Req, error)
 
 // EncodeJSONResponse is a EncodeResponseFunc that serializes the response as a
 // JSON object to the ResponseWriter. Many JSON-over-HTTP services can use it as
-// a sensible default. TODO: If the response implements Headerer, the provided headers
+// a sensible default. If the response implements Headerer, the provided headers
 // will be applied to the response. If the response implements StatusCoder, the
 // provided StatusCode will be used instead of 200.
 func EncodeJSONResponse[Res any](_ context.Context, w http.ResponseWriter, response Res) error {
