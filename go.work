@@ -3,6 +3,7 @@ go 1.21.6
 use (
 	./core
 	./example
+	./transport/echo
 	./transport/http
 	./transport/jetstream
 )
