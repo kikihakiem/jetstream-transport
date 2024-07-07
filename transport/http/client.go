@@ -169,7 +169,7 @@ type ClientFinalizerFunc func(ctx context.Context, err error)
 
 // EncodeJSONRequest is an EncodeRequestFunc that serializes the request as a
 // JSON object to the Request body. Many JSON-over-HTTP services can use it as
-// a sensible default. TODO: If the request implements Headerer, the provided headers
+// a sensible default. If the request implements Headerer, the provided headers
 // will be applied to the request.
 func EncodeJSONRequest[Req any](c context.Context, r *http.Request, request Req) error {
 	r.Header.Set("Content-Type", "application/json; charset=utf-8")
